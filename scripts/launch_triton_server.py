@@ -42,9 +42,10 @@ def parse_arguments():
         '-f',
         action='store_true',
         help='launch tritonserver regardless of other instances running')
-    parser.add_argument('--log',
-                        action='store_true',
-                        help='log triton server stats into log_file')
+    parser.add_argument('--log-level',
+                        type=int,
+                        default=3,
+                        help='verbose level of triton log')
     parser.add_argument(
         '--log-file',
         type=str,
@@ -111,15 +112,15 @@ def check_triton_version(required_version):
 
 
 def get_cmd(world_size, tritonserver, grpc_port, http_port, metrics_port,
-            model_repo, log, log_file, tensorrt_llm_model_name, oversubscribe,
+            model_repo, log_level, log_file, tensorrt_llm_model_name, oversubscribe,
             multimodal_gpu0_cuda_mem_pool_bytes):
     cmd = ['mpirun', '--allow-run-as-root']
     if oversubscribe:
         cmd += ['--oversubscribe']
     for i in range(world_size):
         cmd += ['-n', '1', tritonserver, f'--model-repository={model_repo}']
-        if log and (i == 0):
-            cmd += ['--log-verbose=3', f'--log-file={log_file}']
+        if log_level and (i == 0):
+            cmd += [f'--log-verbose={log_level}', f'--log-file={log_file}']
         # If rank is not 0, skip loading of models other than `tensorrt_llm_model_name`
         if (i != 0):
             cmd += ['--model-control-mode=explicit']
@@ -159,7 +160,7 @@ if __name__ == '__main__':
         else:
             raise RuntimeError(msg + ' Or use --force.')
     cmd = get_cmd(int(args.world_size), args.tritonserver, args.grpc_port,
-                  args.http_port, args.metrics_port, args.model_repo, args.log,
+                  args.http_port, args.metrics_port, args.model_repo, args.log_level,
                   args.log_file, args.tensorrt_llm_model_name,
                   args.oversubscribe, args.multimodal_gpu0_cuda_mem_pool_bytes)
     env = os.environ.copy()
@@ -168,4 +169,4 @@ if __name__ == '__main__':
             assert args.world_size == 1, 'World size must be 1 when using multi-model without disable-spawn-processes. Processes will be spawned automatically to run the multi-GPU models'
         env['TRTLLM_ORCHESTRATOR'] = '1'
         env['TRTLLM_ORCHESTRATOR_SPAWN_PROCESSES'] = '0' if args.disable_spawn_processes else '1'
-    subprocess.Popen(cmd, env=env)
+    subprocess.run(cmd, env=env)
